@@ -1,7 +1,6 @@
 # syntax=docker/dockerfile:1
 
 ARG ALPINE_VERSION=3.21.3
-ARG APP_NAME=go-orchestrator
 ARG GO_VERSION=1.24.3
 ARG PORT=8080
 
@@ -18,7 +17,7 @@ ARG TARGETARCH
 
 RUN --mount=type=cache,target=/go/pkg/mod/ \
     --mount=type=bind,target=. \
-    CGO_ENABLED=0 GOARCH=$TARGETARCH go build -o /bin/${APP_NAME} ./cmd/${APP_NAME}
+    CGO_ENABLED=0 GOARCH=$TARGETARCH go build -o /bin/go-orchestrator ./cmd/go-orchestrator
 
 FROM alpine:${ALPINE_VERSION} AS final
 
@@ -43,8 +42,8 @@ RUN adduser \
 
 USER appuser
 
-COPY --from=build /bin/${APP_NAME} /bin/
+COPY --from=build /bin/go-orchestrator /bin/
 
 EXPOSE ${PORT}
 
-ENTRYPOINT [ "/bin/${APP_NAME}" ]
+ENTRYPOINT [ "/bin/go-orchestrator" ]
