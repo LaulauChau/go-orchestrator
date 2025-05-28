@@ -100,4 +100,4 @@ jobs:
 
       - name: Build
         run: |
-          go build -o bin/go-kv cmd/go-kv/main.go
+          go build -o bin/go-orchestrator cmd/go-orchestrator/main.go
