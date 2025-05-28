@@ -23,6 +23,7 @@ func (d *DockerContainerManager) CreateContainer(ctx context.Context, config Con
 
 	args := d.buildCreateArgs(config)
 
+	// #nosec G204 - Docker CLI usage with controlled arguments is intentional
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -285,7 +286,7 @@ func (d *DockerContainerManager) parseUptimeFromStatus(status string) time.Durat
 
 func isHexString(s string) bool {
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
 			return false
 		}
 	}
