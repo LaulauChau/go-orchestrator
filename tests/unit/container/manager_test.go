@@ -32,8 +32,8 @@ func TestDockerManager_Create(t *testing.T) {
 			t.Errorf("Expected image %s, got %s", config.Image, c.Image)
 		}
 
-		if c.State != container.ContainerStateCreated {
-			t.Errorf("Expected state %v, got %v", container.ContainerStateCreated, c.State)
+		if c.GetState() != container.ContainerStateCreated {
+			t.Errorf("Expected state %v, got %v", container.ContainerStateCreated, c.GetState())
 		}
 
 		if c.Created.IsZero() {

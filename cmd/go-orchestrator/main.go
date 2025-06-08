@@ -109,7 +109,7 @@ var psCmd = &cobra.Command{
 			}
 
 			fmt.Printf("%-12s %-20s %-20s %-10s %-20s\n",
-				shortID, name, image, string(c.State), c.Created.Format("2006-01-02 15:04:05"))
+				shortID, name, image, string(c.GetState()), c.Created.Format("2006-01-02 15:04:05"))
 		}
 		return nil
 	},

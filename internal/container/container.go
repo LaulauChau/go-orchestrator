@@ -1,6 +1,7 @@
 package container
 
 import (
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,7 @@ const (
 
 // Container represents a container instance
 type Container struct {
+	mu       sync.RWMutex    `json:"-"` // Protects all fields below
 	ID       string          `json:"id"`
 	Name     string          `json:"name"`
 	Image    string          `json:"image"`
@@ -54,16 +56,58 @@ type VolumeMount struct {
 
 // IsRunning returns true if the container is in running state
 func (c *Container) IsRunning() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.State == ContainerStateRunning
 }
 
 // IsStopped returns true if the container is stopped or failed
 func (c *Container) IsStopped() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.State == ContainerStateStopped || c.State == ContainerStateFailed
 }
 
-// SetState updates the container state and timestamps
+// GetState returns the current state of the container (thread-safe)
+func (c *Container) GetState() ContainerState {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.State
+}
+
+// SetStateForTest sets the container state for testing purposes (thread-safe)
+func (c *Container) SetStateForTest(state ContainerState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.State = state
+}
+
+// SetStartedForTest sets the Started timestamp for testing purposes (thread-safe)
+func (c *Container) SetStartedForTest(started *time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Started = started
+}
+
+// GetStarted returns the Started timestamp (thread-safe)
+func (c *Container) GetStarted() *time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Started
+}
+
+// GetFinished returns the Finished timestamp (thread-safe)
+func (c *Container) GetFinished() *time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Finished
+}
+
+// SetState updates the container state and timestamps (thread-safe)
 func (c *Container) SetState(state ContainerState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.State = state
 	now := time.Now()
 

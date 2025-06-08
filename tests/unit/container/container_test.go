@@ -22,7 +22,8 @@ func TestContainer_IsRunning(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &container.Container{State: tt.state}
+			c := &container.Container{}
+			c.SetStateForTest(tt.state)
 			if got := c.IsRunning(); got != tt.want {
 				t.Errorf("Container.IsRunning() = %v, want %v", got, tt.want)
 			}
@@ -45,7 +46,8 @@ func TestContainer_IsStopped(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := &container.Container{State: tt.state}
+			c := &container.Container{}
+			c.SetStateForTest(tt.state)
 			if got := c.IsStopped(); got != tt.want {
 				t.Errorf("Container.IsStopped() = %v, want %v", got, tt.want)
 			}
@@ -55,72 +57,75 @@ func TestContainer_IsStopped(t *testing.T) {
 
 func TestContainer_SetState(t *testing.T) {
 	t.Run("sets running state with timestamp", func(t *testing.T) {
-		c := &container.Container{State: container.ContainerStateCreated}
+		c := &container.Container{}
+		c.SetStateForTest(container.ContainerStateCreated)
 		before := time.Now()
 
 		c.SetState(container.ContainerStateRunning)
 
-		if c.State != container.ContainerStateRunning {
-			t.Errorf("Expected state %v, got %v", container.ContainerStateRunning, c.State)
+		if c.GetState() != container.ContainerStateRunning {
+			t.Errorf("Expected state %v, got %v", container.ContainerStateRunning, c.GetState())
 		}
 
-		if c.Started == nil {
+		if c.GetStarted() == nil {
 			t.Error("Expected Started timestamp to be set")
 		}
 
-		if c.Started.Before(before) {
+		if c.GetStarted().Before(before) {
 			t.Error("Started timestamp should be after test start")
 		}
 	})
 
 	t.Run("sets stopped state with timestamp", func(t *testing.T) {
-		c := &container.Container{State: container.ContainerStateRunning}
+		c := &container.Container{}
+		c.SetStateForTest(container.ContainerStateRunning)
 		before := time.Now()
 
 		c.SetState(container.ContainerStateStopped)
 
-		if c.State != container.ContainerStateStopped {
-			t.Errorf("Expected state %v, got %v", container.ContainerStateStopped, c.State)
+		if c.GetState() != container.ContainerStateStopped {
+			t.Errorf("Expected state %v, got %v", container.ContainerStateStopped, c.GetState())
 		}
 
-		if c.Finished == nil {
+		if c.GetFinished() == nil {
 			t.Error("Expected Finished timestamp to be set")
 		}
 
-		if c.Finished.Before(before) {
+		if c.GetFinished().Before(before) {
 			t.Error("Finished timestamp should be after test start")
 		}
 	})
 
 	t.Run("sets failed state with timestamp", func(t *testing.T) {
-		c := &container.Container{State: container.ContainerStateRunning}
+		c := &container.Container{}
+		c.SetStateForTest(container.ContainerStateRunning)
 		before := time.Now()
 
 		c.SetState(container.ContainerStateFailed)
 
-		if c.State != container.ContainerStateFailed {
-			t.Errorf("Expected state %v, got %v", container.ContainerStateFailed, c.State)
+		if c.GetState() != container.ContainerStateFailed {
+			t.Errorf("Expected state %v, got %v", container.ContainerStateFailed, c.GetState())
 		}
 
-		if c.Finished == nil {
+		if c.GetFinished() == nil {
 			t.Error("Expected Finished timestamp to be set")
 		}
 
-		if c.Finished.Before(before) {
+		if c.GetFinished().Before(before) {
 			t.Error("Finished timestamp should be after test start")
 		}
 	})
 
 	t.Run("does not overwrite existing timestamps", func(t *testing.T) {
 		startTime := time.Now().Add(-time.Hour)
-		c := &container.Container{
-			State:   container.ContainerStateRunning,
-			Started: &startTime,
-		}
+		c := &container.Container{}
+		c.SetStateForTest(container.ContainerStateRunning)
+		// We need to set Started manually for this test since SetStateForTest doesn't set timestamps
+		c.SetStartedForTest(&startTime)
 
 		c.SetState(container.ContainerStateRunning)
 
-		if c.Started.Equal(startTime) == false {
+		if c.GetStarted().Equal(startTime) == false {
 			t.Error("Started timestamp should not be overwritten")
 		}
 	})
