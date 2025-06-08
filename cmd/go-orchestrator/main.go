@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -19,22 +20,8 @@ var (
 	logger     *slog.Logger
 	cm         container.ContainerManager
 	supervisor *container.ContainerSupervisor
+	setupOnce  sync.Once
 )
-
-func init() {
-	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
-	cm = container.NewDockerManager(logger)
-
-	// Create supervisor with restart policy
-	policy := container.RestartPolicy{
-		Type:       container.RestartPolicyOnFailure,
-		MaxRetries: 3,
-	}
-	supervisor = container.NewContainerSupervisor(cm, logger, policy)
-}
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
@@ -56,15 +43,17 @@ container lifecycle management, scheduling, and resource control.`,
 				logger.Error("failed to start supervisor", slog.String("error", err.Error()))
 			}
 
-			// Handle graceful shutdown
-			go func() {
-				sigChan := make(chan os.Signal, 1)
-				signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-				<-sigChan
-				logger.Info("shutting down gracefully...")
-				supervisor.Stop()
-				os.Exit(0)
-			}()
+			// Handle graceful shutdown (only start once)
+			setupOnce.Do(func() {
+				go func() {
+					sigChan := make(chan os.Signal, 1)
+					signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+					<-sigChan
+					logger.Info("shutting down gracefully...")
+					supervisor.Stop()
+					os.Exit(0)
+				}()
+			})
 		}
 	},
 }
@@ -298,6 +287,22 @@ func showContainerStats(containerID string) error {
 }
 
 func init() {
+	// Initialize logger
+	logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	// Initialize container manager
+	cm = container.NewDockerManager(logger)
+
+	// Create supervisor with restart policy
+	policy := container.RestartPolicy{
+		Type:       container.RestartPolicyOnFailure,
+		MaxRetries: 3,
+	}
+	supervisor = container.NewContainerSupervisor(cm, logger, policy)
+
+	// Add CLI commands
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(startCmd)

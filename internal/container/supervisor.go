@@ -76,14 +76,14 @@ func NewContainerSupervisor(manager ContainerManager, logger *slog.Logger, polic
 // Start begins monitoring container events
 func (cs *ContainerSupervisor) Start(ctx context.Context) error {
 	cs.runningMutex.Lock()
+	defer cs.runningMutex.Unlock()
+
 	if cs.running {
-		cs.runningMutex.Unlock()
 		return fmt.Errorf("supervisor is already running")
 	}
 	cs.running = true
 	// Recreate stopChan in case it was closed before
 	cs.stopChan = make(chan struct{})
-	cs.runningMutex.Unlock()
 
 	cs.logger.Info("starting container supervisor")
 
@@ -139,10 +139,15 @@ func (cs *ContainerSupervisor) GetContainerStats(containerID string) (*Container
 // monitorDockerEvents monitors Docker events stream
 func (cs *ContainerSupervisor) monitorDockerEvents(ctx context.Context) {
 	for {
+		// Get stopChan safely
+		cs.runningMutex.RLock()
+		stopChan := cs.stopChan
+		cs.runningMutex.RUnlock()
+
 		select {
 		case <-ctx.Done():
 			return
-		case <-cs.stopChan:
+		case <-stopChan:
 			return
 		default:
 			cs.startEventStream(ctx)
@@ -180,11 +185,16 @@ func (cs *ContainerSupervisor) startEventStream(ctx context.Context) {
 
 		// Filter for container events from our orchestrator
 		if event.Type == "container" && cs.isOrchestratorContainer(event.Actor.Attributes["name"]) {
+			// Get stopChan safely
+			cs.runningMutex.RLock()
+			stopChan := cs.stopChan
+			cs.runningMutex.RUnlock()
+
 			select {
 			case cs.eventsChan <- event:
 			case <-ctx.Done():
 				return
-			case <-cs.stopChan:
+			case <-stopChan:
 				return
 			default:
 				cs.logger.Warn("events channel full, dropping event")
@@ -200,10 +210,15 @@ func (cs *ContainerSupervisor) startEventStream(ctx context.Context) {
 // processEvents processes Docker events and updates container states
 func (cs *ContainerSupervisor) processEvents(ctx context.Context) {
 	for {
+		// Get stopChan safely
+		cs.runningMutex.RLock()
+		stopChan := cs.stopChan
+		cs.runningMutex.RUnlock()
+
 		select {
 		case <-ctx.Done():
 			return
-		case <-cs.stopChan:
+		case <-stopChan:
 			return
 		case event := <-cs.eventsChan:
 			cs.handleContainerEvent(ctx, event)
@@ -311,10 +326,11 @@ func (cs *ContainerSupervisor) updateContainerStats(containerID, exitCodeStr str
 	if exitCodeStr != "" && exitCodeStr != "0" {
 		// Only count non-zero exit codes as failures
 		if _, err := fmt.Sscanf(exitCodeStr, "%d", &stats.LastExitCode); err != nil {
-			// Log parsing error but continue
-			cs.logger.Debug("failed to parse exit code",
+			// If parsing fails, log and set to a default non-zero value
+			cs.logger.Warn("failed to parse exit code",
 				slog.String("exit_code", exitCodeStr),
 				slog.String("error", err.Error()))
+			stats.LastExitCode = 1 // Default failure exit code
 		}
 	}
 }
@@ -365,7 +381,11 @@ func (cs *ContainerSupervisor) handleRestartPolicy(ctx context.Context, containe
 // restartContainer restarts a container with backoff
 func (cs *ContainerSupervisor) restartContainer(ctx context.Context, container *Container) {
 	cs.statsMutex.Lock()
-	stats := cs.stats[container.ID]
+	stats, exists := cs.stats[container.ID]
+	if !exists {
+		stats = &ContainerStats{}
+		cs.stats[container.ID] = stats
+	}
 	stats.mu.Lock()
 	restartCount := stats.RestartCount
 	stats.RestartCount++
@@ -387,11 +407,16 @@ func (cs *ContainerSupervisor) restartContainer(ctx context.Context, container *
 
 	container.SetState(ContainerStateRestarting)
 
+	// Get stopChan safely
+	cs.runningMutex.RLock()
+	stopChan := cs.stopChan
+	cs.runningMutex.RUnlock()
+
 	select {
 	case <-time.After(backoff):
 	case <-ctx.Done():
 		return
-	case <-cs.stopChan:
+	case <-stopChan:
 		return
 	}
 
@@ -424,10 +449,15 @@ func (cs *ContainerSupervisor) periodicStateSync(ctx context.Context) {
 	defer ticker.Stop()
 
 	for {
+		// Get stopChan safely
+		cs.runningMutex.RLock()
+		stopChan := cs.stopChan
+		cs.runningMutex.RUnlock()
+
 		select {
 		case <-ctx.Done():
 			return
-		case <-cs.stopChan:
+		case <-stopChan:
 			return
 		case <-ticker.C:
 			cs.syncContainerStates(ctx)
