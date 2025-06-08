@@ -1,0 +1,36 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+    path-ignore:
+      - ".github/**"
+      - "**.md"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set Release Please Target Branch
+        run: echo "target_branch=main" >> $GITHUB_OUTPUT
+
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          release-type: go
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
